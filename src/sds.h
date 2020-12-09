@@ -30,6 +30,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * 1. 如何实现动态字符串
+ *    1. 根据实际使用的字符串大小进行空间申请，将不同大小的字符串分为五类
+ *    2. 只有当添加字符串的时候超出当前类型的空间，才会升级为更大的类型
+ *    3. 空间释放采用惰性的方式，如果sds字符串缩短，并不会立即将空间释放，而是增加可用空间大小，当下次增加字符串的时候不需要再次分配
+ * 2. 相对c字符串的好处
+ *    1. 能进入二进制字符串
+ *    2. 记录了字符串长度，不需要每次获取长度都需要遍历
+ *    3. 杜绝缓存区溢出(每次添加字符串都会进行判断)
+ *    4. 减少修改字符串长度时所需分配内存的次数(字符串缩短、空间预分配)
+ *
+ */
 #ifndef __SDS_H
 #define __SDS_H
 
@@ -44,14 +56,17 @@ typedef char *sds;
 
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
  * However is here to document the layout of type 5 SDS strings. */
+/**
+ * 从未使用过只是作为标记位，之所以将sds区分位5种类型，是为了根据保存的字符串长度不同选择最合适的数据结构进行保存，可以节约内存空间
+ */
 struct __attribute__ ((__packed__)) sdshdr5 {
     unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr8 {
-    uint8_t len; /* used */
-    uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    uint8_t len; /* 字符串的真正长度 */
+    uint8_t alloc; /* 排除结束符后最大长度 */
+    unsigned char flags; /* 总是占一个字节，前3个字节表示当前sds类型，后5个字符串未使用 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr16 {
@@ -84,6 +99,11 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+/**
+ * 获取sds长度
+ * @param s
+ * @return
+ */
 static inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -101,6 +121,11 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+/**
+ * 返回可用空间大小
+ * @param s
+ * @return
+ */
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -127,6 +152,12 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
+/**
+ * 设置sds的长度
+ *
+ * @param s
+ * @param newlen
+ */
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -193,7 +224,11 @@ static inline size_t sdsalloc(const sds s) {
     }
     return 0;
 }
-
+/**
+ * 设置sds总的字节唱的
+ * @param s
+ * @param newlen
+ */
 static inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -214,16 +249,22 @@ static inline void sdssetalloc(sds s, size_t newlen) {
             break;
     }
 }
-
 sds sdsnewlen(const void *init, size_t initlen);
 sds sdsnew(const char *init);
 sds sdsempty(void);
+/* 复制一个字符串 */
 sds sdsdup(const sds s);
+/* 释放空间 */
 void sdsfree(sds s);
+/* 扩容 */
 sds sdsgrowzero(sds s, size_t len);
+/* 添加二进制字符串 */
 sds sdscatlen(sds s, const void *t, size_t len);
+/* 使用的 sdscatlen*/
 sds sdscat(sds s, const char *t);
+/* 使用的 sdscatlen*/
 sds sdscatsds(sds s, const sds t);
+/* 在原来的对象上修改长度 */
 sds sdscpylen(sds s, const char *t, size_t len);
 sds sdscpy(sds s, const char *t);
 
@@ -236,26 +277,45 @@ sds sdscatprintf(sds s, const char *fmt, ...);
 #endif
 
 sds sdscatfmt(sds s, char const *fmt, ...);
+/* sds中移除指定字符串 */
 sds sdstrim(sds s, const char *cset);
+/* 截取指定长度的字符串丢弃 */
 void sdsrange(sds s, ssize_t start, ssize_t end);
+/* 无用 */
 void sdsupdatelen(sds s);
+/* 释放字符串空间，其实就是将len设置为0并不会真的释放空间 */
 void sdsclear(sds s);
+/* 比较两个字符串，如果长度相等返回0，s1长度大于s2返回1，否则返回-1 */
 int sdscmp(const sds s1, const sds s2);
+/* 给定字符串进行切割，并存入sds */
 sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *count);
 void sdsfreesplitres(sds *tokens, int count);
+/* 字符串大小写转化 */
 void sdstolower(sds s);
 void sdstoupper(sds s);
+
 sds sdsfromlonglong(long long value);
 sds sdscatrepr(sds s, const char *p, size_t len);
 sds *sdssplitargs(const char *line, int *argc);
+
+/* 替换 */
 sds sdsmapchars(sds s, const char *from, const char *to, size_t setlen);
+/* 将数组内容用指定分隔符拼接 */
 sds sdsjoin(char **argv, int argc, char *sep);
 sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen);
 
 /* Low level functions exposed to the user API */
+/* 暴露给用户的api */
+/* 直接在对象中修改长度 */
 sds sdsMakeRoomFor(sds s, size_t addlen);
 void sdsIncrLen(sds s, ssize_t incr);
+/* 将所有可用空间去除，使得下次添加必须要扩容 */
 sds sdsRemoveFreeSpace(sds s);
+/**
+ * 返回指定的sds字符串分配的总大小，包括：1）指针之前的sds标头。 2）字符串。 3）最后的空闲缓冲区（如果有）。 4）隐式空项。
+ * @param s
+ * @return
+ */
 size_t sdsAllocSize(sds s);
 void *sdsAllocPtr(sds s);
 
