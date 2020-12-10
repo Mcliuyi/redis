@@ -39,6 +39,10 @@
  * listSetFreeMethod.
  *
  * On error, NULL is returned. Otherwise the pointer to the new list. */
+/**
+ * 创建一个空的list
+ * @return
+ */
 list *listCreate(void)
 {
     struct list *list;
@@ -54,6 +58,11 @@ list *listCreate(void)
 }
 
 /* Remove all the elements from the list without destroying the list itself. */
+/**
+ * 将链表的所有节点指向null
+ *
+ * @param list
+ */
 void listEmpty(list *list)
 {
     unsigned long len;
@@ -74,6 +83,10 @@ void listEmpty(list *list)
 /* Free the whole list.
  *
  * This function can't fail. */
+/**
+ * 释放list的内存
+ * @param list
+ */
 void listRelease(list *list)
 {
     listEmpty(list);
@@ -86,6 +99,13 @@ void listRelease(list *list)
  * On error, NULL is returned and no operation is performed (i.e. the
  * list remains unaltered).
  * On success the 'list' pointer you pass to the function is returned. */
+/**
+ * 将指定值添加到链表头部
+ *
+ * @param list
+ * @param value
+ * @return
+ */
 list *listAddNodeHead(list *list, void *value)
 {
     listNode *node;
@@ -184,6 +204,12 @@ void listDelNode(list *list, listNode *node)
  * call to listNext() will return the next element of the list.
  *
  * This function can't fail. */
+/**
+ * 将list 转化为迭代器，如果direction不为0则迭代器next为尾节点
+ * @param list
+ * @param direction
+ * @return
+ */
 listIter *listGetIterator(list *list, int direction)
 {
     listIter *iter;
@@ -248,6 +274,11 @@ listNode *listNext(listIter *iter)
  * the original node is used as value of the copied node.
  *
  * The original list both on success or error is never modified. */
+/**
+ * 复制一份list的副本
+ * @param orig
+ * @return
+ */
 list *listDup(list *orig)
 {
     list *copy;
