@@ -44,40 +44,71 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+/**
+ * 字典，并且为单向链表
+ * 链表的原因是解决hash冲突
+ */
 typedef struct dictEntry {
     void *key;
+    /* value 支持的类型 指针、无符号64位整形、有符号64、双精度浮点型 */
     union {
         void *val;
         uint64_t u64;
         int64_t s64;
         double d;
     } v;
+    /* 下一个节点 */
     struct dictEntry *next;
 } dictEntry;
 
 typedef struct dictType {
+    /* 计算hash值 */
     uint64_t (*hashFunction)(const void *key);
+    /* 复制键函数 */
     void *(*keyDup)(void *privdata, const void *key);
+    /* 复制值函数 */
     void *(*valDup)(void *privdata, const void *obj);
+    /* 对比键的函数 */
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    /* 销毁键的函数 */
     void (*keyDestructor)(void *privdata, void *key);
+    /* 销毁值的函数 */
     void (*valDestructor)(void *privdata, void *obj);
 } dictType;
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
+/**
+ * 哈希表 类似与Jdk7 中的HashMap的 桶+链表的形式
+ */
 typedef struct dictht {
+    /* map数组， */
     dictEntry **table;
+    /* 数组大小 */
     unsigned long size;
+    /* 哈希表大小掩码 总是等于size - 1  */
     unsigned long sizemask;
+    /* map 数量 */
     unsigned long used;
 } dictht;
 
+/**
+ *  字典，采用渐进式扩容 rehash，
+ *  每次不会将所有的数据全部rehash，而是一部分一部分进行，有效避免了rehash对服务器性能造成的影响
+ *  如果添加元素时存在rehash会直接在新的桶里面保存新数据
+ *  查询数据时如果旧的桶没有查到数据则会到新的桶中查找
+ */
 typedef struct dict {
+    /* 类型特定函数 */
     dictType *type;
+    /* 私有数据 用于传递给类型函数的 */
     void *privdata;
+    /* 正常保存数据只使用ht[0], ht[1] 用于rehash */
     dictht ht[2];
+    /* 标记当前rehash进度，如果是为 -1 则表示不需要rehash */
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+
+    /* 创建的迭代器数量 */
     unsigned long iterators; /* number of iterators currently running */
 } dict;
 
@@ -148,8 +179,22 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 #define dictIsRehashing(d) ((d)->rehashidx != -1)
 
 /* API */
+/* 创建一个hash表但不做任务操作 */
 dict *dictCreate(dictType *type, void *privDataPtr);
+/**
+ * 扩容或者创建
+ * @param d
+ * @param size
+ * @return
+ */
 int dictExpand(dict *d, unsigned long size);
+/**
+ * 添加数据
+ * @param d
+ * @param key
+ * @param val
+ * @return
+ */
 int dictAdd(dict *d, void *key, void *val);
 dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);
 dictEntry *dictAddOrFind(dict *d, void *key);
